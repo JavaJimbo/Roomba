@@ -1,0 +1,17 @@
+﻿  VisualGDB: Sending 2 updated source files to build machine...
+  VisualGDB: Run "make -f "VisualGDB/Debug/Roomba.msbuild-mak"" in directory "/tmp/VisualGDB/c/RPI/Roomba" on pi@192.168.0.3 (SSH)
+  RoombaCommander.cpp
+  RoombaCommander.cpp: In function 'int main(int, char**)':
+RoombaCommander.cpp(69,22): warning :  deprecated conversion from string constant to 'char*' [-Wwrite-strings]
+    char *outPortName = "/dev/ttyUSB0";
+                        ^
+RoombaCommander.cpp(70,21): warning :  deprecated conversion from string constant to 'char*' [-Wwrite-strings]
+    char *inPortName = "/dev/ttyAMA0";
+                       ^
+RoombaCommander.cpp(74,22): warning :  deprecated conversion from string constant to 'char*' [-Wwrite-strings]
+    char *ptrStartMSG = "\rTesting USB and hardware Serial ports"; 
+                        ^
+RoombaCommander.cpp(79,13): warning :  deprecated conversion from string constant to 'char*' [-Wwrite-strings]
+    char * s = "Hello world";
+               ^
+  Linking VisualGDB/Debug/Roomba...
