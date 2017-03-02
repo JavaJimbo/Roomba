@@ -7,7 +7,8 @@
  *
  * Can QUIT or SHUT DOWN RPI on command.
  * Briefly tested SD card writes and timer routines.
- * Got SEGMENTATION FAULT 
+ * 
+ * 3-2-2017: Command sequence is now: COMMAND, SUBCOMMAND, NUM DATA BYTES, DATA....
  */
 using namespace std;
 
@@ -27,14 +28,16 @@ using namespace std;
 
 #define ESCAPE 0x1B
 #define MAXBUFFER 80
+#define QUIT 0x80
+#define SHUTDOWN 0xA0
+#define ROOMBA 0x00
 
 void set_mincount(int inPort, int mcount);
 int set_interface_attribs(int inPort, int speed);
 
-unsigned int decodePacket(unsigned char *ptrInPacket, unsigned int numInBytes, unsigned char *ptrData);
-unsigned char inPacket[MAXBUFFER], inData[MAXBUFFER] = { 137, 0, 200, 3, 232 };
+unsigned int decodePacket(unsigned char *ptrInPacket, unsigned int inPacketSize, unsigned char *ptrData);
+unsigned char inPacket[MAXBUFFER], inData[MAXBUFFER], outData[MAXBUFFER];
 int comError = 0;
-unsigned int dataIndex = 0;
 int error = 0;
 
 
@@ -69,11 +72,14 @@ int main(int argc, char *argv[])
 	char strReady[] = "COM PORTS OPEN: READY";
 	char *outPortName = "/dev/ttyUSB0";
 	char *inPortName = "/dev/ttyAMA0";
-	int numInBytes = 0;
+	int inPacketSize = 0;
 	int inPort, outPort;
 	int wlen;
 	char *ptrStartMSG = "\rTesting USB and hardware Serial ports";	
-	unsigned char command = 0;
+	unsigned char command = 0, subCommand = 0;
+	int i, j;
+
+	for (i = 0; i < MAXBUFFER; i++) inPacket[i] = inData[i] = outData[i] = 0;
 
 	FILE *fp;    // File pointer 
 	double x = 3.14, y = 5.67, z = 99.1;
@@ -118,46 +124,34 @@ int main(int argc, char *argv[])
 	tcdrain(inPort);
 
 	do {
-		numInBytes = read(inPort, inPacket, sizeof(inPacket) - 1);
-		if (numInBytes > 0)
+		inPacketSize = read(inPort, inPacket, sizeof(inPacket) - 1);
+		if (inPacketSize > 0)
 		{
-			int numDataBytes = decodePacket(inPacket, numInBytes, inData);			
-			if (numDataBytes != 0)
+			int inDataSize = decodePacket(inPacket, inPacketSize, inData);			
+			if (inDataSize != 0)
 			{					
-				char strReply[MAXBUFFER] = " >Data: "; // TODO: change this to strcpy(), move definition to top of main()
-				char strTemp[MAXBUFFER];
-				if (numDataBytes < 16)
-				{					
-					for (int i = 0; i < numDataBytes; i++)
-					{
-						sprintf(strTemp, "%d, ", inData[i]);
-						strcat(strReply, strTemp);
-					}				
-				}
-				else error = 11; 					
-				
-				int replyLength = strlen(strReply);
-				write(inPort, strReply, replyLength);
-				tcdrain(inPort);
-
 				command = inData[0];
-				if (!command) {
-					write(outPort, &inData[2], numDataBytes);
+				subCommand = inData[1];
+				if (command == ROOMBA) {					
+					outData[0] = inData[1]; // Roomba command byte
+					j = 1;
+					for (i = 3; i < inDataSize; i++) outData[j++] = inData[i];
+					write(outPort, outData, j);
 					tcdrain(outPort);
 				}
-				#define QUIT 0x80
-				#define SHUTDOWN 0xA0
-				else if (command == QUIT) {
+				else if (subCommand == QUIT) {
 					close(inPort);
 					close(outPort);
 					exit(0);
 				}
-				else if (command == SHUTDOWN) {
+				else if (subCommand == SHUTDOWN) {
 					close(inPort);
 					close(outPort);
 					system("sudo shutdown -h now");
 					exit(0);
 				}
+				else 
+					error++;
 			}
 		}	
 	} while (1);
@@ -220,12 +214,13 @@ void set_mincount(int inPort, int mcount) {
 #define ETX 13
 #define DLE 16
 
-unsigned int decodePacket (unsigned char *ptrInPacket, unsigned int numInBytes, unsigned char *ptrData) {	
+unsigned int decodePacket (unsigned char *ptrInPacket, unsigned int inPacketSize, unsigned char *ptrData) {	
 	static unsigned char startFlag = false, escapeFlag = false;
+	static unsigned int dataIndex = 0;
 	unsigned char ch;
 	unsigned int i = 0, dataLength;
 
-	if (ptrInPacket == NULL || numInBytes == 0 || ptrData == NULL || numInBytes >= MAXBUFFER || dataIndex >= MAXBUFFER)
+	if (ptrInPacket == NULL || inPacketSize == 0 || ptrData == NULL || inPacketSize >= MAXBUFFER || dataIndex >= MAXBUFFER)
 	{
 		startFlag = false;
 		escapeFlag = false;
@@ -262,6 +257,6 @@ unsigned int decodePacket (unsigned char *ptrInPacket, unsigned int numInBytes, 
 			if (startFlag) dataIndex++;  	
 		}
 	
-	} while (i < numInBytes && i < MAXBUFFER && dataIndex < MAXBUFFER);
+	} while (i < inPacketSize && i < MAXBUFFER && dataIndex < MAXBUFFER);
 	return (0);
 }	
